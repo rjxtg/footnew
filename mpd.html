@@ -2,10 +2,10 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<meta name="robots" content="noindex, nofollow">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex,nofollow">
 <meta name="referrer" content="no-referrer">
-<title>Mobile DASH Player</title>
+<title>Modern Player</title>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/shaka-player/4.7.11/shaka-player.compiled.js"></script>
 
@@ -15,14 +15,15 @@ html,body{
   width:100%;
   height:100%;
   background:#000;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
   overflow:hidden;
-  font-family:Arial, sans-serif;
 }
 
-#player-container{
+#player{
   position:relative;
   width:100%;
   height:100%;
+  background:#000;
 }
 
 video{
@@ -32,46 +33,63 @@ video{
   background:#000;
 }
 
-/* Controls */
+/* Modern Controls */
 .controls{
   position:absolute;
   bottom:0;
   left:0;
   right:0;
-  background:linear-gradient(transparent,rgba(0,0,0,.9));
-  padding:18px 12px;
+  padding:18px;
   display:flex;
   align-items:center;
-  gap:12px;
+  gap:14px;
+  background:linear-gradient(transparent,rgba(0,0,0,.85));
+  backdrop-filter: blur(10px);
   opacity:0;
   transition:.3s;
 }
 
-#player-container.show-controls .controls{
-  opacity:1;
+#player.active .controls{opacity:1}
+
+.ctrl-btn{
+  width:42px;
+  height:42px;
+  border-radius:50%;
+  border:none;
+  background:rgba(255,255,255,.08);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  cursor:pointer;
+  transition:.25s;
 }
 
-button{
-  background:none;
-  border:none;
-  color:#fff;
-  font-size:20px;
-  cursor:pointer;
+.ctrl-btn:hover{
+  background:rgba(255,255,255,.18);
+  transform:scale(1.1);
+}
+
+.ctrl-btn svg{
+  width:20px;
+  height:20px;
+  fill:#fff;
 }
 
 .time{
   color:#fff;
   font-size:14px;
+  opacity:.8;
 }
 
 .spacer{flex:1}
 
 select{
-  background:rgba(0,0,0,.6);
+  background:rgba(255,255,255,.08);
   color:#fff;
-  border:1px solid rgba(255,255,255,.3);
-  padding:4px 6px;
-  border-radius:4px;
+  border:1px solid rgba(255,255,255,.2);
+  padding:6px 10px;
+  border-radius:20px;
+  outline:none;
 }
 
 /* Loader */
@@ -80,16 +98,16 @@ select{
   top:50%;
   left:50%;
   transform:translate(-50%,-50%);
-  width:45px;
-  height:45px;
+  width:50px;
+  height:50px;
   border:4px solid rgba(255,255,255,.2);
-  border-top:4px solid red;
+  border-top:4px solid #ff0000;
   border-radius:50%;
   animation:spin .8s linear infinite;
   display:none;
 }
 
-.loader.active{display:block}
+.loader.show{display:block}
 
 @keyframes spin{
   to{transform:translate(-50%,-50%) rotate(360deg)}
@@ -99,39 +117,60 @@ select{
 
 <body>
 
-<div id="player-container">
-  <video id="video" playsinline webkit-playsinline autoplay muted></video>
+<div id="player">
+  <video id="video" playsinline webkit-playsinline></video>
   <div class="loader" id="loader"></div>
 
   <div class="controls">
-    <button id="play">⏯</button>
-    <button id="mute">🔊</button>
+    <button class="ctrl-btn" id="playBtn">
+      <svg id="playIcon" viewBox="0 0 24 24">
+        <path d="M8 5v14l11-7z"/>
+      </svg>
+    </button>
+
+    <button class="ctrl-btn" id="muteBtn">
+      <svg id="muteIcon" viewBox="0 0 24 24">
+        <path d="M3 9v6h4l5 5V4L7 9H3z"/>
+      </svg>
+    </button>
+
     <span class="time" id="time">LIVE</span>
+
     <div class="spacer"></div>
+
     <select id="quality">
       <option value="-1">Auto</option>
     </select>
-    <button id="fs">⛶</button>
+
+    <button class="ctrl-btn" id="fsBtn">
+      <svg viewBox="0 0 24 24">
+        <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/>
+      </svg>
+    </button>
   </div>
 </div>
 
 <script>
-function getParam(name){
-  return new URLSearchParams(window.location.search).get(name) || "";
+function param(n){
+  return new URLSearchParams(location.search).get(n)||"";
 }
-
-function decodeUrl(){
-  const g=getParam("get");
-  const f=getParam("file");
+function getStream(){
+  const g=param("get");
+  const f=param("file");
   if(g){try{return atob(g)}catch(e){return g}}
   return f;
 }
 
-const url=decodeUrl();
+const url=getStream();
 const video=document.getElementById("video");
-const container=document.getElementById("player-container");
+const playerBox=document.getElementById("player");
 const loader=document.getElementById("loader");
 const quality=document.getElementById("quality");
+const time=document.getElementById("time");
+const playBtn=document.getElementById("playBtn");
+const playIcon=document.getElementById("playIcon");
+const muteBtn=document.getElementById("muteBtn");
+const muteIcon=document.getElementById("muteIcon");
 
 if(!url){
   alert("No stream URL provided");
@@ -148,29 +187,19 @@ async function init(){
 
   const player=new shaka.Player(video);
 
-  player.configure({
-    streaming:{
-      bufferingGoal:20,
-      rebufferingGoal:2
-    },
-    abr:{enabled:true}
-  });
-
   player.addEventListener("buffering",e=>{
-    loader.classList.toggle("active",e.buffering);
+    loader.classList.toggle("show",e.buffering);
   });
 
   try{
     await player.load(url);
     populateQuality(player);
-    video.play().catch(()=>{});
   }catch(e){
-    alert("Stream load failed");
+    alert("Stream failed");
   }
 
   function populateQuality(p){
-    const tracks=p.getVariantTracks();
-    tracks.sort((a,b)=>b.height-a.height);
+    const tracks=p.getVariantTracks().sort((a,b)=>b.height-a.height);
     const seen=new Set();
     tracks.forEach(t=>{
       if(t.height && !seen.has(t.height)){
@@ -183,7 +212,7 @@ async function init(){
     });
   }
 
-  quality.addEventListener("change",()=>{
+  quality.onchange=()=>{
     const val=parseInt(quality.value);
     if(val===-1){
       player.configure({abr:{enabled:true}});
@@ -192,29 +221,59 @@ async function init(){
       const track=player.getVariantTracks().find(t=>t.id===val);
       if(track) player.selectVariantTrack(track,true);
     }
-  });
-
-  document.getElementById("play").onclick=()=>{
-    video.paused?video.play():video.pause();
   };
-
-  document.getElementById("mute").onclick=()=>{
-    video.muted=!video.muted;
-  };
-
-  document.getElementById("fs").onclick=()=>{
-    if(!document.fullscreenElement){
-      container.requestFullscreen?.();
-    }else{
-      document.exitFullscreen?.();
-    }
-  };
-
-  video.addEventListener("click",()=>{
-    container.classList.add("show-controls");
-    setTimeout(()=>container.classList.remove("show-controls"),3000);
-  });
 }
+
+/* Modern UI Logic */
+
+playBtn.onclick=()=>{
+  video.paused?video.play():video.pause();
+};
+
+video.addEventListener("play",()=>{
+  playIcon.innerHTML='<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>';
+});
+
+video.addEventListener("pause",()=>{
+  playIcon.innerHTML='<path d="M8 5v14l11-7z"/>';
+});
+
+muteBtn.onclick=()=>{
+  video.muted=!video.muted;
+  muteIcon.innerHTML=video.muted?
+  '<path d="M16 7l-4 4-4-4-2 2 4 4-4 4 2 2 4-4 4 4 2-2-4-4 4-4z"/>':
+  '<path d="M3 9v6h4l5 5V4L7 9H3z"/>';
+};
+
+document.getElementById("fsBtn").onclick=()=>{
+  if(!document.fullscreenElement){
+    playerBox.requestFullscreen?.();
+  }else{
+    document.exitFullscreen?.();
+  }
+};
+
+video.addEventListener("timeupdate",()=>{
+  if(!isFinite(video.duration)){
+    time.textContent="LIVE";
+  }else{
+    const f=s=>String(Math.floor(s)).padStart(2,"0");
+    time.textContent=
+      f(video.currentTime/60)+":"+f(video.currentTime%60);
+  }
+});
+
+/* Auto hide controls */
+function showControls(){
+  playerBox.classList.add("active");
+  clearTimeout(window.hideTimer);
+  window.hideTimer=setTimeout(()=>{
+    playerBox.classList.remove("active");
+  },3000);
+}
+
+video.addEventListener("click",showControls);
+playerBox.addEventListener("mousemove",showControls);
 </script>
 
 </body>
