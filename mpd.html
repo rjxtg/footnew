@@ -3,182 +3,290 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Modern Player</title>
+<title>Premium Modern Player</title>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/shaka-player/4.3.5/shaka-player.compiled.js"></script>
 
 <style>
-body {
-  margin:0;
-  background:#0f0f0f;
-  font-family:Arial, sans-serif;
-}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#000;font-family:system-ui}
 
-.player-container {
+.player{
   position:relative;
   width:100%;
   height:100vh;
-  background:black;
+  background:#000;
   overflow:hidden;
 }
 
-video {
+video{
   width:100%;
   height:100%;
   object-fit:contain;
-  background:black;
+  background:#000;
 }
 
-/* Center Play Button */
-.big-play {
+/* Telegram Button */
+.telegram{
   position:absolute;
-  top:50%;
-  left:50%;
+  top:20px;
+  left:20px;
+  display:flex;
+  align-items:center;
+  gap:8px;
+  padding:10px 18px;
+  border-radius:40px;
+  background:rgba(0,136,204,0.15);
+  backdrop-filter:blur(20px);
+  color:#00aced;
+  text-decoration:none;
+  font-weight:600;
+  z-index:10;
+}
+.telegram svg{width:20px;fill:#00aced}
+
+/* Center Play */
+.center-play{
+  position:absolute;
+  top:50%;left:50%;
   transform:translate(-50%,-50%);
-  width:80px;
-  height:80px;
+  width:100px;height:100px;
   border-radius:50%;
-  background:rgba(255,255,255,0.15);
-  backdrop-filter:blur(10px);
+  background:rgba(255,255,255,0.1);
+  backdrop-filter:blur(20px);
   display:flex;
   align-items:center;
   justify-content:center;
   cursor:pointer;
-  transition:0.3s;
+  transition:.3s;
 }
+.center-play:hover{transform:translate(-50%,-50%) scale(1.1)}
+.center-play svg{width:40px;fill:#fff}
 
-.big-play:hover {
-  background:rgba(255,255,255,0.25);
-}
-
-.big-play svg {
-  width:35px;
-  fill:white;
-}
-
-/* Bottom Controls */
-.controls {
+/* Controls */
+.controls{
   position:absolute;
-  bottom:20px;
-  left:50%;
-  transform:translateX(-50%);
-  display:flex;
-  gap:15px;
-  background:rgba(0,0,0,0.6);
-  padding:10px 20px;
-  border-radius:30px;
-  backdrop-filter:blur(10px);
+  bottom:0;
+  width:100%;
+  padding:15px;
+  background:linear-gradient(to top, rgba(0,0,0,0.7), transparent);
+  transition:opacity .3s;
 }
 
-.control-btn {
-  width:40px;
-  height:40px;
+/* Progress Bar */
+.progress-container{
+  width:100%;
+  height:5px;
+  background:rgba(255,255,255,0.2);
+  cursor:pointer;
+  border-radius:5px;
+  margin-bottom:12px;
+}
+.progress{
+  height:100%;
+  width:0%;
+  background:#ff0000;
+  border-radius:5px;
+}
+
+/* Bottom Buttons */
+.bottom-controls{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+}
+
+.left-controls, .right-controls{
+  display:flex;
+  align-items:center;
+  gap:15px;
+}
+
+.btn{
+  width:40px;height:40px;
   border-radius:50%;
   display:flex;
   align-items:center;
   justify-content:center;
   cursor:pointer;
   background:rgba(255,255,255,0.1);
-  transition:0.3s;
 }
+.btn svg{width:20px;fill:#fff}
 
-.control-btn:hover {
-  background:rgba(255,255,255,0.2);
-}
-
-.control-btn svg {
-  width:20px;
-  fill:white;
-}
-
-/* Telegram Button */
-.telegram-btn {
-  position:absolute;
-  top:15px;
-  left:15px;
-  background:#0088cc;
-  color:white;
-  padding:8px 14px;
-  border-radius:25px;
-  display:flex;
-  align-items:center;
-  gap:6px;
-  text-decoration:none;
+.time{
+  color:#fff;
   font-size:14px;
-  font-weight:bold;
 }
 
-.telegram-btn svg {
-  width:18px;
-  fill:white;
+/* Quality Dropdown */
+select{
+  background:rgba(255,255,255,0.1);
+  border:none;
+  color:#fff;
+  padding:5px;
+  border-radius:6px;
 }
+
+/* Loader */
+.loader{
+  position:absolute;
+  top:50%;left:50%;
+  transform:translate(-50%,-50%);
+  width:50px;height:50px;
+  border:4px solid rgba(255,255,255,0.3);
+  border-top:4px solid #fff;
+  border-radius:50%;
+  animation:spin 1s linear infinite;
+  display:none;
+}
+@keyframes spin{
+  0%{transform:translate(-50%,-50%) rotate(0deg)}
+  100%{transform:translate(-50%,-50%) rotate(360deg)}
+}
+
+.hide{opacity:0}
 </style>
 </head>
 
 <body>
 
-<div class="player-container">
+<div class="player" id="player">
 
-  <!-- Telegram Button -->
-  <a href="https://t.me/YOURCHANNEL" target="_blank" class="telegram-btn">
-    <svg viewBox="0 0 24 24">
-      <path d="M9.04 16.5l-.38 5.36c.54 0 .77-.23 1.05-.5l2.52-2.41 5.22 3.82c.96.53 1.64.25 1.9-.89l3.45-16.16h.01c.31-1.45-.52-2.02-1.45-1.68L1.2 9.68c-1.4.55-1.38 1.34-.24 1.69l5.7 1.78L19.94 5.5c.62-.4 1.18-.18.72.22"/>
-    </svg>
-    Join Telegram
-  </a>
+<a href="https://t.me/YOURCHANNEL" target="_blank" class="telegram">
+<svg viewBox="0 0 24 24">
+<path d="M9.04 16.5l-.38 5.36c.54 0 .77-.23 1.05-.5l2.52-2.41 5.22 3.82c.96.53 1.64.25 1.9-.89l3.45-16.16c.31-1.45-.52-2.02-1.45-1.68L1.2 9.68c-1.4.55-1.38 1.34-.24 1.69l5.7 1.78L19.94 5.5c.62-.4 1.18-.18.72.22"/>
+</svg>
+Join Telegram
+</a>
 
-  <video id="video" playsinline webkit-playsinline></video>
+<video id="video" playsinline webkit-playsinline></video>
 
-  <!-- Big Play -->
-  <div class="big-play" id="bigPlay">
-    <svg viewBox="0 0 24 24">
-      <polygon points="8,5 19,12 8,19"/>
-    </svg>
-  </div>
+<div class="loader" id="loader"></div>
 
-  <!-- Bottom Controls -->
-  <div class="controls">
-    <div class="control-btn" id="muteBtn">
-      <svg id="muteIcon" viewBox="0 0 24 24">
-        <path d="M3 9v6h4l5 5V4L7 9H3z"/>
-      </svg>
-    </div>
-  </div>
+<div class="center-play" id="bigPlay">
+<svg viewBox="0 0 24 24">
+<polygon points="8,5 19,12 8,19"/>
+</svg>
+</div>
+
+<div class="controls" id="controls">
+
+<div class="progress-container" id="progressContainer">
+<div class="progress" id="progress"></div>
+</div>
+
+<div class="bottom-controls">
+<div class="left-controls">
+<div class="btn" id="playPause">
+<svg viewBox="0 0 24 24"><polygon points="8,5 19,12 8,19"/></svg>
+</div>
+
+<div class="btn" id="muteBtn">
+<svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3z"/></svg>
+</div>
+
+<div class="time" id="timeDisplay">0:00 / 0:00</div>
+</div>
+
+<div class="right-controls">
+<select id="quality"></select>
+
+<div class="btn" id="fullscreenBtn">
+<svg viewBox="0 0 24 24">
+<path d="M7 14H5v5h5v-2H7v-3zm12 5v-5h-2v3h-3v2h5zM7 7h3V5H5v5h2V7zm10 0h3v3h2V5h-5v2z"/>
+</svg>
+</div>
+</div>
+</div>
+</div>
 
 </div>
 
 <script>
-const video = document.getElementById('video');
-const bigPlay = document.getElementById('bigPlay');
-const muteBtn = document.getElementById('muteBtn');
+const video=document.getElementById('video');
+const bigPlay=document.getElementById('bigPlay');
+const playPause=document.getElementById('playPause');
+const muteBtn=document.getElementById('muteBtn');
+const progress=document.getElementById('progress');
+const progressContainer=document.getElementById('progressContainer');
+const timeDisplay=document.getElementById('timeDisplay');
+const fullscreenBtn=document.getElementById('fullscreenBtn');
+const qualitySelect=document.getElementById('quality');
+const controls=document.getElementById('controls');
+const loader=document.getElementById('loader');
+const playerContainer=document.getElementById('player');
 
-async function init() {
-  const player = new shaka.Player(video);
+let shakaPlayer;
 
-  try {
-    await player.load("YOUR_MPD_LINK_HERE");
-    console.log("Video loaded");
-  } catch (e) {
-    console.error(e);
-  }
+async function init(){
+  shakaPlayer=new shaka.Player(video);
+
+  try{
+    loader.style.display="block";
+    await shakaPlayer.load("YOUR_MPD_LINK_HERE");
+    loader.style.display="none";
+
+    const tracks=shakaPlayer.getVariantTracks();
+    qualitySelect.innerHTML='<option value="auto">Auto</option>';
+    tracks.forEach(track=>{
+      if(track.height){
+        qualitySelect.innerHTML+=`<option value="${track.id}">${track.height}p</option>`;
+      }
+    });
+
+  }catch(e){console.error(e);}
 }
 
-bigPlay.addEventListener('click', () => {
-  video.play();
-  bigPlay.style.display = "none";
+bigPlay.onclick=()=>{video.play();};
+playPause.onclick=()=>{video.paused?video.play():video.pause();};
+muteBtn.onclick=()=>{video.muted=!video.muted;};
+
+video.addEventListener("play",()=>{bigPlay.style.display="none";});
+video.addEventListener("pause",()=>{bigPlay.style.display="flex";});
+
+video.addEventListener("timeupdate",()=>{
+  const percent=(video.currentTime/video.duration)*100;
+  progress.style.width=percent+"%";
+
+  const format=t=>Math.floor(t/60)+":"+("0"+Math.floor(t%60)).slice(-2);
+  timeDisplay.textContent=`${format(video.currentTime)} / ${format(video.duration)}`;
 });
 
-muteBtn.addEventListener('click', () => {
-  video.muted = !video.muted;
-});
+progressContainer.onclick=e=>{
+  const rect=progressContainer.getBoundingClientRect();
+  const pos=(e.clientX-rect.left)/rect.width;
+  video.currentTime=pos*video.duration;
+};
 
-video.addEventListener('pause', () => {
-  bigPlay.style.display = "flex";
-});
+fullscreenBtn.onclick=()=>{
+  if(!document.fullscreenElement){
+    playerContainer.requestFullscreen();
+  }else{
+    document.exitFullscreen();
+  }
+};
 
-video.addEventListener('play', () => {
-  bigPlay.style.display = "none";
-});
+qualitySelect.onchange=()=>{
+  if(qualitySelect.value==="auto"){
+    shakaPlayer.configure({abr:{enabled:true}});
+  }else{
+    shakaPlayer.configure({abr:{enabled:false}});
+    shakaPlayer.selectVariantTrack(
+      shakaPlayer.getVariantTracks().find(t=>t.id==qualitySelect.value),
+      true
+    );
+  }
+};
+
+/* Auto hide */
+let timeout;
+function showControls(){
+  controls.classList.remove("hide");
+  clearTimeout(timeout);
+  timeout=setTimeout(()=>{controls.classList.add("hide");},3000);
+}
+playerContainer.addEventListener("mousemove",showControls);
+playerContainer.addEventListener("touchstart",showControls);
 
 init();
 </script>
