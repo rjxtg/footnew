@@ -1,279 +1,186 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="robots" content="noindex,nofollow">
-<meta name="referrer" content="no-referrer">
-<title>FootLive Player</title>
+<title>Modern Player</title>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/shaka-player/4.7.11/shaka-player.compiled.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/shaka-player/4.3.5/shaka-player.compiled.js"></script>
 
 <style>
-*{margin:0;padding:0;box-sizing:border-box}
-html,body{
+body {
+  margin:0;
+  background:#0f0f0f;
+  font-family:Arial, sans-serif;
+}
+
+.player-container {
+  position:relative;
   width:100%;
-  height:100%;
-  background:#000;
-  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  height:100vh;
+  background:black;
   overflow:hidden;
 }
 
-#player{
-  position:relative;
-  width:100%;
-  height:100%;
-  background:#000;
-}
-
-video{
+video {
   width:100%;
   height:100%;
   object-fit:contain;
-  background:#000;
+  background:black;
 }
 
-/* Modern Controls */
-.controls{
-  position:absolute;
-  bottom:0;
-  left:0;
-  right:0;
-  padding:18px;
-  display:flex;
-  align-items:center;
-  gap:14px;
-  background:linear-gradient(transparent,rgba(0,0,0,.85));
-  backdrop-filter: blur(10px);
-  opacity:0;
-  transition:.3s;
-}
-
-#player.active .controls{opacity:1}
-
-.ctrl-btn{
-  width:42px;
-  height:42px;
-  border-radius:50%;
-  border:none;
-  background:rgba(255,255,255,.08);
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  cursor:pointer;
-  transition:.25s;
-}
-
-.ctrl-btn:hover{
-  background:rgba(255,255,255,.18);
-  transform:scale(1.1);
-}
-
-.ctrl-btn svg{
-  width:20px;
-  height:20px;
-  fill:#fff;
-}
-
-.time{
-  color:#fff;
-  font-size:14px;
-  opacity:.8;
-}
-
-.spacer{flex:1}
-
-select{
-  background:rgba(255,255,255,.08);
-  color:#fff;
-  border:1px solid rgba(255,255,255,.2);
-  padding:6px 10px;
-  border-radius:20px;
-  outline:none;
-}
-
-/* Loader */
-.loader{
+/* Center Play Button */
+.big-play {
   position:absolute;
   top:50%;
   left:50%;
   transform:translate(-50%,-50%);
-  width:50px;
-  height:50px;
-  border:4px solid rgba(255,255,255,.2);
-  border-top:4px solid #ff0000;
+  width:80px;
+  height:80px;
   border-radius:50%;
-  animation:spin .8s linear infinite;
-  display:none;
+  background:rgba(255,255,255,0.15);
+  backdrop-filter:blur(10px);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  cursor:pointer;
+  transition:0.3s;
 }
 
-.loader.show{display:block}
+.big-play:hover {
+  background:rgba(255,255,255,0.25);
+}
 
-@keyframes spin{
-  to{transform:translate(-50%,-50%) rotate(360deg)}
+.big-play svg {
+  width:35px;
+  fill:white;
+}
+
+/* Bottom Controls */
+.controls {
+  position:absolute;
+  bottom:20px;
+  left:50%;
+  transform:translateX(-50%);
+  display:flex;
+  gap:15px;
+  background:rgba(0,0,0,0.6);
+  padding:10px 20px;
+  border-radius:30px;
+  backdrop-filter:blur(10px);
+}
+
+.control-btn {
+  width:40px;
+  height:40px;
+  border-radius:50%;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  cursor:pointer;
+  background:rgba(255,255,255,0.1);
+  transition:0.3s;
+}
+
+.control-btn:hover {
+  background:rgba(255,255,255,0.2);
+}
+
+.control-btn svg {
+  width:20px;
+  fill:white;
+}
+
+/* Telegram Button */
+.telegram-btn {
+  position:absolute;
+  top:15px;
+  left:15px;
+  background:#0088cc;
+  color:white;
+  padding:8px 14px;
+  border-radius:25px;
+  display:flex;
+  align-items:center;
+  gap:6px;
+  text-decoration:none;
+  font-size:14px;
+  font-weight:bold;
+}
+
+.telegram-btn svg {
+  width:18px;
+  fill:white;
 }
 </style>
 </head>
 
 <body>
 
-<div id="player">
+<div class="player-container">
+
+  <!-- Telegram Button -->
+  <a href="https://t.me/YOURCHANNEL" target="_blank" class="telegram-btn">
+    <svg viewBox="0 0 24 24">
+      <path d="M9.04 16.5l-.38 5.36c.54 0 .77-.23 1.05-.5l2.52-2.41 5.22 3.82c.96.53 1.64.25 1.9-.89l3.45-16.16h.01c.31-1.45-.52-2.02-1.45-1.68L1.2 9.68c-1.4.55-1.38 1.34-.24 1.69l5.7 1.78L19.94 5.5c.62-.4 1.18-.18.72.22"/>
+    </svg>
+    Join Telegram
+  </a>
+
   <video id="video" playsinline webkit-playsinline></video>
-  <div class="loader" id="loader"></div>
 
+  <!-- Big Play -->
+  <div class="big-play" id="bigPlay">
+    <svg viewBox="0 0 24 24">
+      <polygon points="8,5 19,12 8,19"/>
+    </svg>
+  </div>
+
+  <!-- Bottom Controls -->
   <div class="controls">
-    <button class="ctrl-btn" id="playBtn">
-      <svg id="playIcon" viewBox="0 0 24 24">
-        <path d="M8 5v14l11-7z"/>
-      </svg>
-    </button>
-
-    <button class="ctrl-btn" id="muteBtn">
+    <div class="control-btn" id="muteBtn">
       <svg id="muteIcon" viewBox="0 0 24 24">
         <path d="M3 9v6h4l5 5V4L7 9H3z"/>
       </svg>
-    </button>
-
-    <span class="time" id="time">LIVE</span>
-
-    <div class="spacer"></div>
-
-    <select id="quality">
-      <option value="-1">Auto</option>
-    </select>
-
-    <button class="ctrl-btn" id="fsBtn">
-      <svg viewBox="0 0 24 24">
-        <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/>
-      </svg>
-    </button>
+    </div>
   </div>
+
 </div>
 
 <script>
-function param(n){
-  return new URLSearchParams(location.search).get(n)||"";
-}
-function getStream(){
-  const g=param("get");
-  const f=param("file");
-  if(g){try{return atob(g)}catch(e){return g}}
-  return f;
-}
+const video = document.getElementById('video');
+const bigPlay = document.getElementById('bigPlay');
+const muteBtn = document.getElementById('muteBtn');
 
-const url=getStream();
-const video=document.getElementById("video");
-const playerBox=document.getElementById("player");
-const loader=document.getElementById("loader");
-const quality=document.getElementById("quality");
-const time=document.getElementById("time");
-const playBtn=document.getElementById("playBtn");
-const playIcon=document.getElementById("playIcon");
-const muteBtn=document.getElementById("muteBtn");
-const muteIcon=document.getElementById("muteIcon");
+async function init() {
+  const player = new shaka.Player(video);
 
-if(!url){
-  alert("No stream URL provided");
-}else{
-  init();
-}
-
-async function init(){
-  shaka.polyfill.installAll();
-  if(!shaka.Player.isBrowserSupported()){
-    alert("Browser not supported");
-    return;
+  try {
+    await player.load("YOUR_MPD_LINK_HERE");
+    console.log("Video loaded");
+  } catch (e) {
+    console.error(e);
   }
-
-  const player=new shaka.Player(video);
-
-  player.addEventListener("buffering",e=>{
-    loader.classList.toggle("show",e.buffering);
-  });
-
-  try{
-    await player.load(url);
-    populateQuality(player);
-  }catch(e){
-    alert("Stream failed");
-  }
-
-  function populateQuality(p){
-    const tracks=p.getVariantTracks().sort((a,b)=>b.height-a.height);
-    const seen=new Set();
-    tracks.forEach(t=>{
-      if(t.height && !seen.has(t.height)){
-        seen.add(t.height);
-        const opt=document.createElement("option");
-        opt.value=t.id;
-        opt.textContent=t.height+"p";
-        quality.appendChild(opt);
-      }
-    });
-  }
-
-  quality.onchange=()=>{
-    const val=parseInt(quality.value);
-    if(val===-1){
-      player.configure({abr:{enabled:true}});
-    }else{
-      player.configure({abr:{enabled:false}});
-      const track=player.getVariantTracks().find(t=>t.id===val);
-      if(track) player.selectVariantTrack(track,true);
-    }
-  };
 }
 
-/* Modern UI Logic */
-
-playBtn.onclick=()=>{
-  video.paused?video.play():video.pause();
-};
-
-video.addEventListener("play",()=>{
-  playIcon.innerHTML='<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>';
+bigPlay.addEventListener('click', () => {
+  video.play();
+  bigPlay.style.display = "none";
 });
 
-video.addEventListener("pause",()=>{
-  playIcon.innerHTML='<path d="M8 5v14l11-7z"/>';
+muteBtn.addEventListener('click', () => {
+  video.muted = !video.muted;
 });
 
-muteBtn.onclick=()=>{
-  video.muted=!video.muted;
-  muteIcon.innerHTML=video.muted?
-  '<path d="M16 7l-4 4-4-4-2 2 4 4-4 4 2 2 4-4 4 4 2-2-4-4 4-4z"/>':
-  '<path d="M3 9v6h4l5 5V4L7 9H3z"/>';
-};
-
-document.getElementById("fsBtn").onclick=()=>{
-  if(!document.fullscreenElement){
-    playerBox.requestFullscreen?.();
-  }else{
-    document.exitFullscreen?.();
-  }
-};
-
-video.addEventListener("timeupdate",()=>{
-  if(!isFinite(video.duration)){
-    time.textContent="LIVE";
-  }else{
-    const f=s=>String(Math.floor(s)).padStart(2,"0");
-    time.textContent=
-      f(video.currentTime/60)+":"+f(video.currentTime%60);
-  }
+video.addEventListener('pause', () => {
+  bigPlay.style.display = "flex";
 });
 
-/* Auto hide controls */
-function showControls(){
-  playerBox.classList.add("active");
-  clearTimeout(window.hideTimer);
-  window.hideTimer=setTimeout(()=>{
-    playerBox.classList.remove("active");
-  },3000);
-}
+video.addEventListener('play', () => {
+  bigPlay.style.display = "none";
+});
 
-video.addEventListener("click",showControls);
-playerBox.addEventListener("mousemove",showControls);
+init();
 </script>
 
 </body>
