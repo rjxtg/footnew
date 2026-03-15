@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
 <meta name="referrer" content="no-referrer">
-<title>Foot Live Player</title>
+<title>Video Player</title>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/shaka-player/4.7.11/shaka-player.ui.js"></script>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/shaka-player/4.7.11/controls.min.css">
@@ -54,10 +54,9 @@
     background: #000;
     z-index: 20;
   }
-
   #error-msg.show { display: flex; }
-  #error-msg svg { width: 52px; height: 52px; opacity: 0.4; }
-  #error-msg p { font-size: 16px; opacity: 0.65; max-width: 300px; line-height: 1.5; }
+  #error-msg svg  { width: 52px; height: 52px; opacity: 0.4; }
+  #error-msg p    { font-size: 16px; opacity: 0.65; max-width: 300px; line-height: 1.5; }
 
   /* Loading spinner */
   #loader {
@@ -70,25 +69,21 @@
     z-index: 10;
     transition: opacity 0.4s;
   }
-
   #loader.hidden { opacity: 0; pointer-events: none; }
 
   .spinner {
-    width: 44px;
-    height: 44px;
+    width: 44px; height: 44px;
     border: 4px solid rgba(255,255,255,0.15);
     border-top-color: #fff;
     border-radius: 50%;
     animation: spin 0.8s linear infinite;
   }
-
   @keyframes spin { to { transform: rotate(360deg); } }
 </style>
 </head>
 <body>
 
 <div id="player-wrap">
-
   <div id="loader"><div class="spinner"></div></div>
 
   <div id="error-msg">
@@ -102,7 +97,6 @@
   <div id="shaka-container" data-shaka-player-container data-shaka-player-cast-receiver-id="">
     <video id="video" data-shaka-player autoplay playsinline></video>
   </div>
-
 </div>
 
 <script>
@@ -118,10 +112,10 @@
     try { return atob(str); } catch (_) { return str; }
   }
 
-  const get      = param("get");
-  const fileUrl  = get ? safeAtob(get) : param("file");
-  const ckParam  = param("ck");
-  const wvParam  = param("wv");
+  const get     = param("get");
+  const fileUrl = get ? safeAtob(get) : param("file");
+  const ckParam = param("ck");
+  const wvParam = param("wv");
 
   const loader   = document.getElementById("loader");
   const errorEl  = document.getElementById("error-msg");
@@ -136,10 +130,11 @@
   }
 
   function onPlayerError(error) {
-    console.error("Shaka Error code:", error.code, error);
+    console.error("Shaka Error:", error.code, error);
     loader.classList.add("hidden");
     if (error.severity === shaka.util.Error.Severity.CRITICAL) {
-      errorTxt.textContent = "Stream error (code " + error.code + "). The stream may be offline or unavailable.";
+      errorTxt.textContent =
+        "Stream error (code " + error.code + "). The stream may be offline or unavailable.";
       errorEl.classList.add("show");
     }
   }
@@ -156,6 +151,7 @@
     window.player = player;
     window.ui     = ui;
 
+    /* ── UI ── */
     ui.configure({
       controlPanelElements: [
         "play_pause", "mute", "volume", "spacer",
@@ -169,27 +165,87 @@
       }
     });
 
+    /* ══════════════════════════════════════════
+       CORE FIX: ABR + streaming config
+       - Let ABR pick quality based on bandwidth
+       - Lower rebuffering goal so playback starts fast
+       - Smaller buffer behind to free memory
+       - Aggressive retry on segment failures
+       - Longer manifest update interval for live streams
+    ══════════════════════════════════════════ */
+    player.configure({
+      abr: {
+        enabled:               true,   // let Shaka auto-pick quality
+        defaultBandwidthEstimate: 500e3, // start from 500 kbps assumption
+        switchInterval:        8,      // don't switch quality too often (seconds)
+        bandwidthUpgradeTarget:  0.85, // upgrade quality when at 85% bandwidth
+        bandwidthDowngradeTarget: 0.95 // drop quality before hitting 95% usage
+      },
+      streaming: {
+        bufferingGoal:          10,    // only buffer 10s ahead (was 30 — too heavy)
+        rebufferingGoal:         1,    // resume after just 1s buffered (was 2)
+        bufferBehind:           15,    // keep 15s behind (saves memory)
+        ignoreTextStreamFailures: true,
+        alwaysStreamText:        false,
+        startAtSegmentBoundary:  true, // avoid partial segment stalls
+        retryParameters: {
+          maxAttempts:    5,
+          baseDelay:      500,         // retry after 0.5s
+          backoffFactor:  1.5,
+          fuzzFactor:     0.3,
+          timeout:        20000        // 20s timeout per segment
+        },
+        inaccurateManifestTolerance: 2,
+        // For live: how often to re-fetch the playlist
+        updateIntervalSeconds: 1       // re-fetch .m3u8 every 1s for live
+      },
+      manifest: {
+        retryParameters: {
+          maxAttempts:   5,
+          baseDelay:     500,
+          backoffFactor: 1.5,
+          fuzzFactor:    0.3,
+          timeout:       15000
+        },
+        // HLS specific
+        hls: {
+          ignoreManifestProgramDateTime: false,
+          useFullSegmentsForStartTime:   true
+        }
+      }
+    });
+
+    /* ── DRM ── */
     if (wvParam) {
       player.configure({ drm: { servers: { "com.widevine.alpha": wvParam } } });
     } else if (ckParam) {
       const parts = ckParam.split(":");
-      const keyId = parts[0] || "";
-      const key   = parts[1] || "";
-      if (keyId && key) {
-        player.configure({ drm: { clearKeys: { [keyId]: key } } });
+      if (parts[0] && parts[1]) {
+        player.configure({ drm: { clearKeys: { [parts[0]]: parts[1] } } });
       }
     }
 
-    player.addEventListener("error", e => onPlayerError(e.detail));
+    /* ── Events ── */
+    player.addEventListener("error",   e => onPlayerError(e.detail));
     controls.addEventListener("error", e => onPlayerError(e.detail));
 
-    player.addEventListener("trackschanged", () => {
-      const tracks = player.getVariantTracks();
-      if (tracks.length > 0) {
-        player.selectVariantTrack(tracks[tracks.length - 1], true);
+    // ✅ REMOVED: the trackschanged force-highest-quality block.
+    // That was the main cause of constant buffering — forcing the top
+    // bitrate regardless of available bandwidth. ABR handles this now.
+
+    // Optional: log quality switches to console for debugging
+    player.addEventListener("adaptation", function () {
+      const active = player.getVariantTracks().find(t => t.active);
+      if (active) {
+        console.info(
+          "[ABR] switched →",
+          (active.height || "?") + "p",
+          "@", Math.round((active.bandwidth || 0) / 1000) + "kbps"
+        );
       }
     });
 
+    /* ── Load ── */
     player.load(fileUrl).then(function () {
       loader.classList.add("hidden");
       video.play().catch(err => console.warn("Autoplay blocked:", err));
@@ -197,6 +253,7 @@
 
   }).catch(onPlayerError);
 
+  /* ── postMessage: hot-swap stream ── */
   window.addEventListener("message", function (ev) {
     if (ev.data && ev.data.hsUrl && window.player) {
       loader.classList.remove("hidden");
@@ -204,7 +261,11 @@
       window.player.load(ev.data.hsUrl).then(function () {
         loader.classList.add("hidden");
         document.getElementById("video").play().catch(() => {});
-      }).catch(onPlayerError);
+      }).catch(function (error) {
+        loader.classList.add("hidden");
+        errorTxt.textContent = "Stream error (code " + error.code + ").";
+        errorEl.classList.add("show");
+      });
     }
   });
 
