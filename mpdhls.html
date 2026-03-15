@@ -4,677 +4,254 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
-<meta name="referrer" content="no-referrer">
-<title>Stream</title>
-
-<!--
-  Shaka Player (compiled/minified) — best DASH/MPD + DRM support.
-  Using the compiled build (NOT the UI bundle) = smaller + faster.
-  Custom controls are built from scratch below.
--->
+<title>Stream Player</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/shaka-player/4.7.11/shaka-player.compiled.js"></script>
-
 <style>
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-  html, body {
-    width: 100%; height: 100%;
-    overflow: hidden;
-    background: #000;
-    font-family: sans-serif;
-    color: #fff;
-    user-select: none;
-  }
-
-  #wrap { position: relative; width: 100%; height: 100%; background: #000; }
-
-  video {
-    width: 100%; height: 100%;
-    background: #000; display: block;
-  }
-
-  /* ── Loader ── */
-  #loader {
-    position: absolute; inset: 0;
-    display: flex; align-items: center; justify-content: center;
-    background: #000; z-index: 30;
-    transition: opacity 0.35s;
-  }
-  #loader.hide { opacity: 0; pointer-events: none; }
-  .spin {
-    width: 38px; height: 38px;
-    border: 3px solid rgba(255,255,255,0.12);
-    border-top-color: #fff; border-radius: 50%;
-    animation: spin 0.75s linear infinite;
-  }
-  @keyframes spin { to { transform: rotate(360deg); } }
-
-  /* ── Error ── */
-  #error {
-    display: none; position: absolute; inset: 0;
-    flex-direction: column; align-items: center; justify-content: center;
-    gap: 12px; text-align: center; padding: 24px;
-    background: #000; z-index: 40;
-  }
-  #error.show { display: flex; }
-  #error svg  { width: 48px; height: 48px; opacity: 0.35; }
-  #error p    { font-size: 14px; opacity: 0.6; max-width: 320px; line-height: 1.7; }
-  #error code {
-    background: rgba(255,255,255,0.1);
-    padding: 1px 5px; border-radius: 3px; font-size: 12px;
-  }
-
-  /* ── Controls ── */
-  #controls {
-    position: absolute; bottom: 0; left: 0; right: 0;
-    z-index: 20;
-    background: linear-gradient(transparent, rgba(0,0,0,0.82));
-    padding: 40px 12px 10px;
-    opacity: 0; transition: opacity 0.25s;
-  }
-  #wrap:hover #controls,
-  #wrap.show-controls #controls { opacity: 1; }
-
-  /* Progress bar */
-  #progress-wrap {
-    position: relative; height: 4px;
-    background: rgba(255,255,255,0.2);
-    border-radius: 2px; cursor: pointer;
-    margin-bottom: 9px; transition: height 0.15s;
-  }
-  #progress-wrap:hover { height: 6px; }
-  #progress-buf {
-    position: absolute; top: 0; left: 0; height: 100%;
-    background: rgba(255,255,255,0.3); border-radius: 2px;
-    pointer-events: none; width: 0%;
-  }
-  #progress-fill {
-    position: absolute; top: 0; left: 0; height: 100%;
-    background: #fff; border-radius: 2px;
-    pointer-events: none; width: 0%;
-  }
-
-  /* Button row */
-  #btn-row { display: flex; align-items: center; gap: 4px; }
-
-  .ctrl-btn {
-    background: none; border: none; color: #fff;
-    cursor: pointer; padding: 6px;
-    display: flex; align-items: center; justify-content: center;
-    border-radius: 4px; flex-shrink: 0;
-    transition: background 0.15s;
-  }
-  .ctrl-btn:hover { background: rgba(255,255,255,0.15); }
-  .ctrl-btn svg { width: 20px; height: 20px; fill: #fff; display: block; }
-
-  /* Volume */
-  #vol-wrap { display: flex; align-items: center; gap: 4px; }
-  #vol-slider {
-    -webkit-appearance: none; appearance: none;
-    width: 70px; height: 3px;
-    background: rgba(255,255,255,0.35);
-    border-radius: 2px; outline: none; cursor: pointer;
-  }
-  #vol-slider::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    width: 12px; height: 12px;
-    background: #fff; border-radius: 50%;
-  }
-
-  #time {
-    font-size: 12px; opacity: 0.8;
-    margin: 0 6px; white-space: nowrap; flex-shrink: 0;
-  }
-  .spacer { flex: 1; }
-
-  /* Live badge */
-  #live-badge {
-    display: none; align-items: center; gap: 5px;
-    font-size: 11px; font-weight: 700; letter-spacing: 0.8px;
-    background: rgba(210,0,0,0.85);
-    padding: 3px 8px; border-radius: 4px; flex-shrink: 0;
-  }
-  #live-badge.show { display: flex; }
-  .dot {
-    width: 6px; height: 6px;
-    background: #fff; border-radius: 50%;
-    animation: blink 1.4s infinite;
-  }
-  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.25} }
-
-  /* Quality menu */
-  #quality-wrap { position: relative; }
-  #quality-btn  { font-size: 11px; font-weight: 700; padding: 4px 8px; letter-spacing: 0.5px; }
-  #quality-menu {
-    display: none; position: absolute; bottom: 38px; right: 0;
-    background: rgba(18,18,18,0.96);
-    backdrop-filter: blur(8px);
-    border-radius: 8px; overflow: hidden;
-    min-width: 120px;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.6);
-  }
-  #quality-menu.open { display: block; }
-  .q-item {
-    padding: 9px 14px; cursor: pointer;
-    font-size: 13px; white-space: nowrap;
-    transition: background 0.12s;
-  }
-  .q-item:hover  { background: rgba(255,255,255,0.1); }
-  .q-item.active { font-weight: 700; background: rgba(255,255,255,0.06); }
-
-  /* Seek flash */
-  .seek-flash {
-    position: absolute; top: 50%; transform: translateY(-50%);
-    z-index: 25;
-    background: rgba(255,255,255,0.15); border-radius: 50%;
-    width: 72px; height: 72px;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 11px; font-weight: 700; pointer-events: none;
-    opacity: 0; transition: opacity 0.25s;
-  }
-  #sf-left  { left: 8%; }
-  #sf-right { right: 8%; }
-  .seek-flash.pop { opacity: 1; }
-
-  /* Speed badge */
-  #speed-badge {
-    position: absolute; top: 50%; left: 50%;
-    transform: translate(-50%, -50%);
-    z-index: 25;
-    background: rgba(0,0,0,0.65);
-    padding: 6px 16px; border-radius: 20px;
-    font-size: 15px; font-weight: 700; pointer-events: none;
-    opacity: 0; transition: opacity 0.25s;
-  }
-  #speed-badge.pop { opacity: 1; }
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:sans-serif;color:#fff;user-select:none}
+#wrap{position:relative;width:100%;height:100%;background:#000;cursor:pointer}
+video{width:100%;height:100%;display:block;background:#000}
+#loader{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:#000;z-index:30;transition:opacity .3s}
+#loader.hide{opacity:0;pointer-events:none}
+.spin{width:36px;height:36px;border:3px solid rgba(255,255,255,.15);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+#controls{position:absolute;bottom:0;left:0;right:0;z-index:20;background:linear-gradient(transparent,rgba(0,0,0,.85));padding:32px 14px 12px;opacity:0;transition:opacity .25s}
+#wrap:hover #controls,#wrap.sc #controls{opacity:1}
+#btn-row{display:flex;align-items:center;gap:6px}
+.cb{background:none;border:none;color:#fff;cursor:pointer;padding:6px;display:flex;align-items:center;justify-content:center;border-radius:4px;flex-shrink:0}
+.cb:hover{background:rgba(255,255,255,.15)}
+.cb svg{width:22px;height:22px;fill:#fff;display:block}
+#vol-wrap{display:flex;align-items:center;gap:4px}
+#vs{-webkit-appearance:none;appearance:none;width:70px;height:3px;background:rgba(255,255,255,.35);border-radius:2px;outline:none;cursor:pointer}
+#vs::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:12px;background:#fff;border-radius:50%}
+.sp{flex:1}
+#qw{position:relative}
+#qbtn{font-size:11px;font-weight:700;padding:4px 8px;letter-spacing:.5px}
+#qm{display:none;position:absolute;bottom:40px;right:0;background:rgba(20,20,20,.96);border-radius:8px;overflow:hidden;min-width:110px;box-shadow:0 4px 20px rgba(0,0,0,.6)}
+#qm.open{display:block}
+.qi{padding:9px 14px;cursor:pointer;font-size:13px;white-space:nowrap}
+.qi:hover{background:rgba(255,255,255,.1)}
+.qi.active{font-weight:700;background:rgba(255,255,255,.06)}
+#err{display:none;position:absolute;inset:0;flex-direction:column;align-items:center;justify-content:center;gap:10px;text-align:center;padding:24px;background:#000;z-index:40}
+#err.show{display:flex}
+#err p{font-size:13px;opacity:.6;max-width:300px;line-height:1.7}
+#err code{background:rgba(255,255,255,.1);padding:2px 6px;border-radius:3px;font-size:11px}
+#url-box{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:35;background:rgba(20,20,20,.96);border-radius:12px;padding:24px;width:min(420px,90vw);display:flex;flex-direction:column;gap:12px}
+#url-box h2{font-size:15px;font-weight:600;opacity:.9}
+#url-box label{font-size:12px;opacity:.55}
+#url-box input{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);color:#fff;padding:9px 12px;border-radius:6px;font-size:13px;outline:none;width:100%}
+#url-box input:focus{border-color:rgba(255,255,255,.5)}
+#url-box input::placeholder{color:rgba(255,255,255,.35)}
+#url-box button{background:#fff;color:#000;border:none;padding:10px;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer}
+#url-box button:hover{background:#e0e0e0}
+#hint{font-size:11px;opacity:.35;text-align:center}
 </style>
 </head>
 <body>
-
 <div id="wrap">
   <div id="loader"><div class="spin"></div></div>
+  <div id="err"><p id="etxt">Stream failed to load.</p></div>
 
-  <div id="error">
-    <svg viewBox="0 0 24 24" fill="white">
-      <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10
-        10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
-    </svg>
-    <p id="error-text">
-      No stream URL provided.<br>
-      Use <code>?file=URL</code> or <code>?get=BASE64</code><br>
-      DRM: <code>&amp;wv=LICENSE_URL</code> or <code>&amp;ck=KEYID:KEY</code>
-    </p>
+  <div id="url-box">
+    <h2>&#9654; Stream Player</h2>
+    <label>Paste your stream URL (.mpd or .m3u8)</label>
+    <input id="url-in" type="url" placeholder="https://example.com/stream.mpd" autocomplete="off" spellcheck="false"/>
+    <button id="load-btn">Load Stream</button>
+    <span id="hint">Supports DASH (.mpd) · HLS (.m3u8) · Widevine DRM via &amp;wv= param</span>
   </div>
 
   <video id="video" autoplay playsinline></video>
 
-  <div id="sf-left"  class="seek-flash">◀◀ 10s</div>
-  <div id="sf-right" class="seek-flash">10s ▶▶</div>
-  <div id="speed-badge"></div>
-
   <div id="controls">
-    <div id="progress-wrap">
-      <div id="progress-buf"></div>
-      <div id="progress-fill"></div>
-    </div>
     <div id="btn-row">
-
-      <!-- Play/Pause -->
-      <button class="ctrl-btn" id="btn-play">
-        <svg id="ico-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+      <button class="cb" id="bp">
+        <svg id="ip" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
       </button>
-
-      <!-- Volume -->
       <div id="vol-wrap">
-        <button class="ctrl-btn" id="btn-mute">
-          <svg id="ico-vol" viewBox="0 0 24 24">
-            <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0
-              0 0 14 7.97v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/>
-          </svg>
+        <button class="cb" id="bm">
+          <svg id="iv" viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0 0 14 7.97v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/></svg>
         </button>
-        <input id="vol-slider" type="range" min="0" max="1" step="0.05" value="1">
+        <input id="vs" type="range" min="0" max="1" step="0.05" value="1">
       </div>
-
-      <span id="time">0:00</span>
-      <div id="live-badge"><div class="dot"></div>LIVE</div>
-      <div class="spacer"></div>
-
-      <!-- Quality -->
-      <div id="quality-wrap">
-        <button class="ctrl-btn" id="quality-btn">AUTO</button>
-        <div id="quality-menu"></div>
+      <div class="sp"></div>
+      <div id="qw">
+        <button class="cb" id="qbtn">AUTO</button>
+        <div id="qm"></div>
       </div>
-
-      <!-- Fullscreen -->
-      <button class="ctrl-btn" id="btn-fs">
-        <svg id="ico-fs" viewBox="0 0 24 24">
-          <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12
-            7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/>
-        </svg>
+      <button class="cb" id="bfs">
+        <svg id="ifs" viewBox="0 0 24 24"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>
       </button>
-
     </div>
   </div>
 </div>
 
 <script>
-(function () {
-  "use strict";
+(function(){
+"use strict";
+const video=document.getElementById("video"),
+loader=document.getElementById("loader"),
+errEl=document.getElementById("err"),
+eTxt=document.getElementById("etxt"),
+wrap=document.getElementById("wrap"),
+bp=document.getElementById("bp"),
+ip=document.getElementById("ip"),
+bm=document.getElementById("bm"),
+iv=document.getElementById("iv"),
+vs=document.getElementById("vs"),
+qBtn=document.getElementById("qbtn"),
+qMenu=document.getElementById("qm"),
+bfs=document.getElementById("bfs"),
+ifs=document.getElementById("ifs"),
+ub=document.getElementById("url-box"),
+urlIn=document.getElementById("url-in"),
+loadBtn=document.getElementById("load-btn");
 
-  /* ── Helpers ── */
-  function param(k) {
-    try { return new URL(location.href).searchParams.get(k) || ""; }
-    catch (_) { return ""; }
-  }
-  function safeAtob(s) { try { return atob(s); } catch (_) { return s; } }
-  function fmt(s) {
-    if (!isFinite(s) || s < 0) return "LIVE";
-    s = Math.floor(s);
-    const h = Math.floor(s / 3600);
-    const m = Math.floor((s % 3600) / 60);
-    const sec = s % 60;
-    return h > 0
-      ? h + ":" + String(m).padStart(2,"0") + ":" + String(sec).padStart(2,"0")
-      : m + ":" + String(sec).padStart(2,"0");
-  }
+const P={
+  play:"M8 5v14l11-7z",
+  pause:"M6 19h4V5H6v14zm8-14v14h4V5h-4z",
+  vOn:"M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0 0 14 7.97v8.05c1.48-.73 2.5-2.25 2.5-4.02z",
+  vOff:"M16.5 12A4.5 4.5 0 0 0 14 7.97v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06A8.99 8.99 0 0 0 17.73 19L19 20.27 20.27 19 5.27 4 4.27 3zM12 4L9.91 6.09 12 8.18V4z",
+  fsOn:"M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z",
+  fsOff:"M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z"
+};
+const si=(el,k)=>el.innerHTML=`<path d="${P[k]}"/>`;
 
-  /* ── Params ── */
-  const raw     = param("get");
-  const fileUrl = raw ? safeAtob(raw) : param("file");
-  const wvParam = param("wv");   // Widevine license URL
-  const ckParam = param("ck");   // ClearKey  KEYID:KEY
+let player=null,hideT;
 
-  /* ── DOM ── */
-  const video      = document.getElementById("video");
-  const loader     = document.getElementById("loader");
-  const errorEl    = document.getElementById("error");
-  const errorTxt   = document.getElementById("error-text");
-  const wrap       = document.getElementById("wrap");
-  const btnPlay    = document.getElementById("btn-play");
-  const icoPlay    = document.getElementById("ico-play");
-  const btnMute    = document.getElementById("btn-mute");
-  const icoVol     = document.getElementById("ico-vol");
-  const volSlider  = document.getElementById("vol-slider");
-  const timeEl     = document.getElementById("time");
-  const liveBadge  = document.getElementById("live-badge");
-  const progWrap   = document.getElementById("progress-wrap");
-  const progFill   = document.getElementById("progress-fill");
-  const progBuf    = document.getElementById("progress-buf");
-  const qBtn       = document.getElementById("quality-btn");
-  const qMenu      = document.getElementById("quality-menu");
-  const btnFs      = document.getElementById("btn-fs");
-  const icoFs      = document.getElementById("ico-fs");
-  const sfL        = document.getElementById("sf-left");
-  const sfR        = document.getElementById("sf-right");
-  const speedBadge = document.getElementById("speed-badge");
+function showC(){wrap.classList.add("sc");clearTimeout(hideT);hideT=setTimeout(()=>{if(!video.paused)wrap.classList.remove("sc");},3000);}
+wrap.addEventListener("mousemove",showC);
+wrap.addEventListener("touchstart",showC,{passive:true});
 
-  document.addEventListener("contextmenu", e => e.preventDefault());
+function togglePlay(){video.paused?video.play():video.pause();}
+bp.addEventListener("click",togglePlay);
+video.addEventListener("click",togglePlay);
+video.addEventListener("play",()=>si(ip,"pause"));
+video.addEventListener("pause",()=>{si(ip,"play");wrap.classList.add("sc");});
 
-  /* ── No URL ── */
-  if (!fileUrl) {
-    loader.classList.add("hide");
-    errorEl.classList.add("show");
-    return;
-  }
+function updateVol(){si(iv,video.muted||video.volume===0?"vOff":"vOn");}
+bm.addEventListener("click",()=>{video.muted=!video.muted;updateVol();});
+vs.addEventListener("input",()=>{video.volume=parseFloat(vs.value);video.muted=video.volume===0;updateVol();});
 
-  /* ── SVG paths ── */
-  const SVG = {
-    play:   "M8 5v14l11-7z",
-    pause:  "M6 19h4V5H6v14zm8-14v14h4V5h-4z",
-    volOn:  "M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0 0 14 7.97v8.05c1.48-.73 2.5-2.25 2.5-4.02z",
-    volOff: "M16.5 12A4.5 4.5 0 0 0 14 7.97v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06A8.99 8.99 0 0 0 17.73 19L19 20.27 20.27 19 5.27 4 4.27 3zM12 4L9.91 6.09 12 8.18V4z",
-    fsOn:   "M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z",
-    fsOff:  "M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z"
+bfs.addEventListener("click",()=>{
+  if(!document.fullscreenElement)wrap.requestFullscreen();
+  else document.exitFullscreen();
+});
+document.addEventListener("fullscreenchange",()=>si(ifs,document.fullscreenElement?"fsOff":"fsOn"));
+
+qBtn.addEventListener("click",e=>{e.stopPropagation();qMenu.classList.toggle("open");});
+document.addEventListener("click",()=>qMenu.classList.remove("open"));
+
+function buildMenu(tracks,activeId){
+  qMenu.innerHTML="";
+  const auto=document.createElement("div");
+  auto.className="qi"+(activeId===-1?" active":"");
+  auto.textContent="Auto";
+  auto.addEventListener("click",()=>{
+    if(player)player.configure({abr:{enabled:true}});
+    qBtn.textContent="AUTO";
+    buildMenu(player.getVariantTracks(),-1);
+  });
+  qMenu.appendChild(auto);
+  tracks.slice().sort((a,b)=>(b.height||0)-(a.height||0)).forEach(t=>{
+    const lbl=t.height?t.height+"p":Math.round((t.bandwidth||0)/1000)+"kbps";
+    const d=document.createElement("div");
+    d.className="qi"+(t.id===activeId?" active":"");
+    d.textContent=lbl;
+    d.addEventListener("click",()=>{
+      if(player){player.configure({abr:{enabled:false}});player.selectVariantTrack(t,true);}
+      qBtn.textContent=lbl;
+      buildMenu(player.getVariantTracks(),t.id);
+    });
+    qMenu.appendChild(d);
+  });
+}
+
+function showErr(msg){
+  loader.classList.add("hide");
+  eTxt.innerHTML=msg;
+  errEl.classList.add("show");
+}
+
+function loadStream(url){
+  if(!url)return;
+  ub.style.display="none";
+  errEl.classList.remove("show");
+  loader.classList.remove("hide");
+  qMenu.innerHTML="";
+  qBtn.textContent="AUTO";
+
+  shaka.polyfill.installAll();
+  if(!shaka.Player.isBrowserSupported()){showErr("Browser not supported.");return;}
+
+  const go=()=>{
+    player=new shaka.Player(video);
+    player.configure({
+      abr:{enabled:true,defaultBandwidthEstimate:2000000,switchInterval:6},
+      streaming:{
+        bufferingGoal:8,rebufferingGoal:1,bufferBehind:15,
+        startAtSegmentBoundary:true,ignoreTextStreamFailures:true,
+        retryParameters:{maxAttempts:5,baseDelay:500,backoffFactor:1.5,fuzzFactor:.3,timeout:15000}
+      },
+      manifest:{
+        retryParameters:{maxAttempts:4,baseDelay:500,backoffFactor:1.5,fuzzFactor:.3,timeout:12000},
+        dash:{autoCorrectDrift:true,ignoreMinBufferTime:true}
+      }
+    });
+
+    /* DRM from URL params */
+    const qp=k=>{try{return new URL(location.href).searchParams.get(k)||"";}catch(_){return "";}};
+    const wv=qp("wv"),ck=qp("ck");
+    if(wv)player.configure({drm:{servers:{"com.widevine.alpha":wv}}});
+    else if(ck){const p=ck.split(":");if(p[0]&&p[1])player.configure({drm:{clearKeys:{[p[0]]:p[1]}}});}
+
+    let rc=0;
+    player.addEventListener("error",e=>{
+      const err=e.detail;
+      if(err.severity===shaka.util.Error.Severity.CRITICAL){
+        rc++;
+        if(rc<=4)setTimeout(()=>loadStream(url),rc*2000);
+        else showErr("Stream error (code "+err.code+"). Stream may be offline or URL expired.");
+      }
+    });
+    player.addEventListener("trackschanged",()=>{
+      const t=player.getVariantTracks();
+      if(t.length>0)buildMenu(t,-1);
+    });
+    player.load(url).then(()=>{
+      loader.classList.add("hide");
+      video.play().catch(()=>{});
+    }).catch(()=>{
+      showErr("Failed to load stream.<br><code>"+url+"</code>");
+    });
   };
-  function setIcon(el, key) { el.innerHTML = "<path d=\"" + SVG[key] + "\"/>"; }
 
-  /* ── Flash helpers ── */
-  let sfLT, sfRT, spT;
-  function flash(side) {
-    const el = side === "l" ? sfL : sfR;
-    el.classList.add("pop");
-    clearTimeout(side === "l" ? sfLT : sfRT);
-    const t = setTimeout(() => el.classList.remove("pop"), 500);
-    if (side === "l") sfLT = t; else sfRT = t;
+  if(player){player.destroy().then(go);}else{go();}
+}
+
+loadBtn.addEventListener("click",()=>loadStream(urlIn.value.trim()));
+urlIn.addEventListener("keydown",e=>{if(e.key==="Enter")loadStream(urlIn.value.trim());});
+document.addEventListener("contextmenu",e=>e.preventDefault());
+
+/* Auto-load from URL params */
+const qp=k=>{try{return new URL(location.href).searchParams.get(k)||"";}catch(_){return "";}};
+const raw=qp("get"),fileUrl=raw?atob(raw):qp("file");
+if(fileUrl){urlIn.value=fileUrl;loadStream(fileUrl);}
+else{loader.classList.add("hide");}
+
+/* Keyboard shortcuts */
+document.addEventListener("keydown",e=>{
+  const tag=document.activeElement.tagName;
+  if(tag==="INPUT"||tag==="TEXTAREA")return;
+  switch(e.key){
+    case" ":case"k":e.preventDefault();togglePlay();break;
+    case"ArrowLeft":e.preventDefault();video.currentTime=Math.max(0,video.currentTime-10);break;
+    case"ArrowRight":e.preventDefault();video.currentTime+=10;break;
+    case"ArrowUp":e.preventDefault();video.volume=Math.min(1,video.volume+0.1);vs.value=video.volume;updateVol();break;
+    case"ArrowDown":e.preventDefault();video.volume=Math.max(0,video.volume-0.1);vs.value=video.volume;updateVol();break;
+    case"m":video.muted=!video.muted;updateVol();break;
+    case"f":if(!document.fullscreenElement)wrap.requestFullscreen();else document.exitFullscreen();break;
   }
-  function showSpeed(r) {
-    speedBadge.textContent = r + "×";
-    speedBadge.classList.add("pop");
-    clearTimeout(spT);
-    spT = setTimeout(() => speedBadge.classList.remove("pop"), 900);
-  }
-
-  /* ── Auto-hide controls ── */
-  let hideTimer;
-  function showControls() {
-    wrap.classList.add("show-controls");
-    clearTimeout(hideTimer);
-    hideTimer = setTimeout(() => {
-      if (!video.paused) wrap.classList.remove("show-controls");
-    }, 3000);
-  }
-  wrap.addEventListener("mousemove",  showControls);
-  wrap.addEventListener("touchstart", showControls, { passive: true });
-
-  /* ── Play / Pause ── */
-  function togglePlay() { video.paused ? video.play() : video.pause(); }
-  btnPlay.addEventListener("click", togglePlay);
-  video.addEventListener("play",  () => setIcon(icoPlay, "pause"));
-  video.addEventListener("pause", () => {
-    setIcon(icoPlay, "play");
-    wrap.classList.add("show-controls");
-  });
-
-  /* ── Volume ── */
-  function updateVolIcon() {
-    setIcon(icoVol, video.muted || video.volume === 0 ? "volOff" : "volOn");
-  }
-  btnMute.addEventListener("click", () => { video.muted = !video.muted; updateVolIcon(); });
-  volSlider.addEventListener("input", () => {
-    video.volume = parseFloat(volSlider.value);
-    video.muted  = video.volume === 0;
-    updateVolIcon();
-  });
-
-  /* ── Progress ── */
-  video.addEventListener("timeupdate", () => {
-    if (!isFinite(video.duration)) return;
-    const pct = (video.currentTime / video.duration) * 100;
-    progFill.style.width = pct + "%";
-    timeEl.textContent   = fmt(video.currentTime) + " / " + fmt(video.duration);
-  });
-  video.addEventListener("progress", () => {
-    if (!video.buffered.length || !isFinite(video.duration)) return;
-    const end = video.buffered.end(video.buffered.length - 1);
-    progBuf.style.width = (end / video.duration * 100) + "%";
-  });
-  progWrap.addEventListener("click", e => {
-    if (!isFinite(video.duration)) return;
-    const r = progWrap.getBoundingClientRect();
-    video.currentTime = ((e.clientX - r.left) / r.width) * video.duration;
-  });
-
-  /* ── Fullscreen ── */
-  btnFs.addEventListener("click", () => {
-    if (!document.fullscreenElement) wrap.requestFullscreen();
-    else document.exitFullscreen();
-  });
-  document.addEventListener("fullscreenchange", () => {
-    setIcon(icoFs, document.fullscreenElement ? "fsOff" : "fsOn");
-  });
-
-  /* ── Quality menu ── */
-  let shakaPlayer = null;
-
-  qBtn.addEventListener("click", e => {
-    e.stopPropagation();
-    qMenu.classList.toggle("open");
-  });
-  document.addEventListener("click", () => qMenu.classList.remove("open"));
-
-  function buildQualityMenu(tracks, activeId) {
-    qMenu.innerHTML = "";
-
-    // Auto
-    const auto = document.createElement("div");
-    auto.className = "q-item" + (activeId === -1 ? " active" : "");
-    auto.textContent = "Auto";
-    auto.addEventListener("click", () => {
-      if (shakaPlayer) shakaPlayer.configure({ abr: { enabled: true } });
-      qBtn.textContent = "AUTO";
-      buildQualityMenu(shakaPlayer.getVariantTracks(), -1);
-    });
-    qMenu.appendChild(auto);
-
-    // Sort highest first
-    const sorted = tracks.slice().sort((a, b) => (b.height || 0) - (a.height || 0));
-    sorted.forEach(function (t) {
-      const label = t.height
-        ? t.height + "p" + (t.frameRate ? " " + Math.round(t.frameRate) + "fps" : "")
-        : Math.round((t.bandwidth || 0) / 1000) + "kbps";
-      const div = document.createElement("div");
-      div.className = "q-item" + (t.id === activeId ? " active" : "");
-      div.textContent = label;
-      div.addEventListener("click", () => {
-        if (shakaPlayer) {
-          shakaPlayer.configure({ abr: { enabled: false } });
-          shakaPlayer.selectVariantTrack(t, true);
-        }
-        qBtn.textContent = label;
-        buildQualityMenu(shakaPlayer.getVariantTracks(), t.id);
-      });
-      qMenu.appendChild(div);
-    });
-  }
-
-  /* ── Keyboard shortcuts ── */
-  document.addEventListener("keydown", e => {
-    const tag = document.activeElement.tagName;
-    if (tag === "INPUT" || tag === "TEXTAREA") return;
-    switch (e.key) {
-      case " ": case "k": e.preventDefault(); togglePlay(); break;
-      case "ArrowLeft":  case "j":
-        e.preventDefault();
-        video.currentTime = Math.max(0, video.currentTime - 10);
-        flash("l"); break;
-      case "ArrowRight": case "l":
-        e.preventDefault();
-        video.currentTime += 10;
-        flash("r"); break;
-      case "ArrowUp":
-        e.preventDefault();
-        video.volume = Math.min(1, video.volume + 0.1);
-        volSlider.value = video.volume; updateVolIcon(); break;
-      case "ArrowDown":
-        e.preventDefault();
-        video.volume = Math.max(0, video.volume - 0.1);
-        volSlider.value = video.volume; updateVolIcon(); break;
-      case "m": video.muted = !video.muted; updateVolIcon(); break;
-      case "f":
-        if (!document.fullscreenElement) wrap.requestFullscreen();
-        else document.exitFullscreen(); break;
-      case ">":
-        video.playbackRate = Math.min(4, +(video.playbackRate + 0.25).toFixed(2));
-        showSpeed(video.playbackRate); break;
-      case "<":
-        video.playbackRate = Math.max(0.25, +(video.playbackRate - 0.25).toFixed(2));
-        showSpeed(video.playbackRate); break;
-    }
-  });
-
-  /* ── Double-tap seek (mobile) ── */
-  let tapTimer = null;
-  video.addEventListener("touchend", function (e) {
-    const x = e.changedTouches[0].clientX;
-    if (tapTimer) {
-      clearTimeout(tapTimer); tapTimer = null;
-      if (x < window.innerWidth / 2) {
-        video.currentTime = Math.max(0, video.currentTime - 10); flash("l");
-      } else {
-        video.currentTime += 10; flash("r");
-      }
-    } else {
-      tapTimer = setTimeout(() => { tapTimer = null; togglePlay(); }, 250);
-    }
-  });
-
-  /* ── Long-press 2× speed (mobile) ── */
-  let lpTimer, wasLP = false;
-  video.addEventListener("touchstart", () => {
-    wasLP = false;
-    lpTimer = setTimeout(() => {
-      wasLP = true;
-      video.playbackRate = 2;
-      showSpeed(2);
-    }, 600);
-  }, { passive: true });
-  video.addEventListener("touchend", () => {
-    clearTimeout(lpTimer);
-    if (wasLP) { video.playbackRate = 1; showSpeed(1); }
-  });
-
-  /* ══════════════════════════════════════
-     SHAKA PLAYER — MPD/DASH optimized
-  ══════════════════════════════════════ */
-  function showError(msg) {
-    loader.classList.add("hide");
-    errorTxt.innerHTML = msg;
-    errorEl.classList.add("show");
-  }
-
-  function initPlayer(url) {
-    loader.classList.remove("hide");
-    errorEl.classList.remove("show");
-
-    shaka.polyfill.installAll();
-
-    if (!shaka.Player.isBrowserSupported()) {
-      showError("This browser does not support DASH/MPD playback.");
-      return;
-    }
-
-    /* Destroy previous instance */
-    if (shakaPlayer) {
-      shakaPlayer.destroy().then(create);
-    } else {
-      create();
-    }
-
-    function create() {
-      shakaPlayer = new shaka.Player(video);
-
-      /* ══════════════════════════════════════
-         KEY CONFIG — why each setting matters
-         for fast MPD loading & no buffering
-      ══════════════════════════════════════ */
-      shakaPlayer.configure({
-
-        /* ABR: let Shaka pick quality based on real bandwidth */
-        abr: {
-          enabled:                  true,
-          defaultBandwidthEstimate: 1000000, // assume 1Mbps to start with a decent quality
-          switchInterval:           6,       // don't switch too often
-          bandwidthUpgradeTarget:   0.85,
-          bandwidthDowngradeTarget: 0.95
-        },
-
-        streaming: {
-          bufferingGoal:             10,    // buffer only 10s ahead — starts faster
-          rebufferingGoal:            1,    // resume after 1s buffered — less stall
-          bufferBehind:              15,    // keep 15s behind playhead — saves RAM
-          startAtSegmentBoundary:   true,   // don't start mid-segment (avoids stall)
-          ignoreTextStreamFailures: true,   // subtitle errors won't crash the stream
-          retryParameters: {
-            maxAttempts:   6,
-            baseDelay:     500,
-            backoffFactor: 1.5,
-            fuzzFactor:    0.3,
-            timeout:       20000
-          },
-          // For live DASH streams: how often to re-fetch the MPD
-          updateIntervalSeconds:     1,
-          // Don't fail if manifest timing is slightly off
-          inaccurateManifestTolerance: 3
-        },
-
-        manifest: {
-          retryParameters: {
-            maxAttempts:   5,
-            baseDelay:     500,
-            backoffFactor: 1.5,
-            fuzzFactor:    0.3,
-            timeout:       15000
-          },
-          dash: {
-            // Ignore minor clock drift in live DASH
-            autoCorrectDrift: true,
-            // Don't reject streams with unknown codecs
-            ignoreMinBufferTime: true
-          }
-        }
-      });
-
-      /* DRM */
-      if (wvParam) {
-        shakaPlayer.configure({
-          drm: { servers: { "com.widevine.alpha": wvParam } }
-        });
-      } else if (ckParam) {
-        const parts = ckParam.split(":");
-        if (parts[0] && parts[1]) {
-          shakaPlayer.configure({
-            drm: { clearKeys: { [parts[0]]: parts[1] } }
-          });
-        }
-      }
-
-      /* Error handler with auto-recovery */
-      let retryCount = 0;
-      shakaPlayer.addEventListener("error", function (e) {
-        const err = e.detail;
-        console.error("Shaka error:", err.code, err);
-        if (err.severity === shaka.util.Error.Severity.CRITICAL) {
-          retryCount++;
-          if (retryCount <= 5) {
-            console.warn("Retrying… attempt", retryCount);
-            setTimeout(() => initPlayer(url), retryCount * 2000);
-          } else {
-            showError(
-              "Stream error (code " + err.code + ").<br>" +
-              "The stream may be offline or the URL has expired."
-            );
-          }
-        }
-      });
-
-      /* Tracks changed → build quality menu */
-      shakaPlayer.addEventListener("trackschanged", function () {
-        const tracks = shakaPlayer.getVariantTracks();
-        if (tracks.length > 1) buildQualityMenu(tracks, -1);
-
-        /* Detect live */
-        if (shakaPlayer.isLive()) {
-          liveBadge.classList.add("show");
-          timeEl.textContent = "LIVE";
-          progFill.style.width = "100%";
-        }
-      });
-
-      /* Log ABR switches */
-      shakaPlayer.addEventListener("adaptation", function () {
-        const active = shakaPlayer.getVariantTracks().find(t => t.active);
-        if (active) {
-          console.info("[ABR]",
-            (active.height || "?") + "p",
-            "@", Math.round((active.bandwidth || 0) / 1000) + "kbps"
-          );
-        }
-      });
-
-      /* Load the MPD */
-      shakaPlayer.load(url).then(function () {
-        loader.classList.add("hide");
-        video.play().catch(() => {});
-      }).catch(function (err) {
-        console.error("Load failed:", err);
-        showError(
-          "Failed to load stream (code " + (err.code || "?") + ").<br>" +
-          "Check the URL is correct and accessible.<br>" +
-          "<code>" + url + "</code>"
-        );
-      });
-    }
-  }
-
-  /* ── Boot ── */
-  initPlayer(fileUrl);
-
-  /* ── postMessage: hot-swap stream ── */
-  window.addEventListener("message", function (ev) {
-    if (ev.data && ev.data.url) initPlayer(ev.data.url);
-    // also support legacy hsUrl key
-    if (ev.data && ev.data.hsUrl) initPlayer(ev.data.hsUrl);
-  });
+});
 
 })();
 </script>
