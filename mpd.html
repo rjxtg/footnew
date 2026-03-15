@@ -2,242 +2,213 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
 <meta name="referrer" content="no-referrer">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<title>Mobile Optimized Player</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/shaka-player/4.7.11/shaka-player.compiled.js"></script>
+<title>Video Player</title>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/shaka-player/4.7.11/shaka-player.ui.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/shaka-player/4.7.11/controls.min.css">
+
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-  
+
   html, body {
     width: 100%;
     height: 100%;
-    background: #000;
     overflow: hidden;
-    font-family: sans-serif;
-    /* Prevents pull-to-refresh on mobile */
-    overscroll-behavior-y: contain; 
-  }
-
-  #video-container {
-    position: relative;
-    width: 100vw;
-    height: 100vh;
     background: #000;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    font-family: sans-serif;
   }
 
-  video {
+  #player-wrap {
+    position: relative;
     width: 100%;
     height: 100%;
-    /* 'contain' ensures the whole video is visible on any screen size */
-    object-fit: contain; 
-    display: block;
   }
 
-  /* Controls overlay optimized for Mobile Touch */
-  .controls {
+  #shaka-container {
+    width: 100%;
+    height: 100%;
+    background: #000;
+  }
+
+  #shaka-container video {
+    width: 100%;
+    height: 100%;
+    background: #000;
+  }
+
+  /* Error state */
+  #error-msg {
+    display: none;
     position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    background: linear-gradient(transparent, rgba(0,0,0,0.9));
-    padding: 20px 15px 20px; /* Extra bottom padding for mobile gestures */
-    display: flex;
+    inset: 0;
     align-items: center;
-    gap: 12px;
-    opacity: 0;
-    transition: opacity 0.3s;
-    z-index: 100;
+    justify-content: center;
+    flex-direction: column;
+    gap: 14px;
+    color: #fff;
+    text-align: center;
+    padding: 24px;
+    background: #000;
+    z-index: 20;
   }
 
-  #video-container:hover .controls,
-  #video-container.paused .controls,
-  .controls:active { opacity: 1; }
+  #error-msg.show { display: flex; }
+  #error-msg svg { width: 52px; height: 52px; opacity: 0.4; }
+  #error-msg p { font-size: 16px; opacity: 0.65; max-width: 300px; line-height: 1.5; }
 
-  .ctrl-btn {
-    background: none;
-    border: none;
-    color: #fff;
-    cursor: pointer;
-    padding: 8px; /* Larger touch target */
+  /* Loading spinner */
+  #loader {
+    position: absolute;
+    inset: 0;
     display: flex;
     align-items: center;
     justify-content: center;
-    flex-shrink: 0;
+    background: #000;
+    z-index: 10;
+    transition: opacity 0.4s;
   }
 
-  .ctrl-btn svg { width: 26px; height: 26px; fill: white; }
-
-  /* Fullscreen Button - Bottom Right Positioned */
-  #fs-btn {
-    margin-left: auto; /* Pushes it to the far right */
-  }
-
-  .time-display {
-    color: #fff;
-    font-size: 14px;
-    font-weight: bold;
-    white-space: nowrap;
-  }
-
-  .volume-slider {
-    width: 60px;
-    accent-color: #D50000;
-  }
-
-  /* Hide volume slider on small mobile screens to save space */
-  @media (max-width: 480px) {
-    .volume-slider { display: none; }
-  }
-
-  .quality-select {
-    background: rgba(255,255,255,0.1);
-    border: 1px solid rgba(255,255,255,0.3);
-    color: #fff;
-    padding: 5px;
-    border-radius: 4px;
-    font-size: 12px;
-  }
-
-  /* Big central play button */
-  .big-play {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    width: 80px; height: 80px;
-    background: rgba(213,0,0,0.9);
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 60;
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.2s;
-  }
-  .big-play.visible { opacity: 1; pointer-events: all; }
-  .big-play svg { width: 40px; height: 40px; fill: white; margin-left: 5px; }
+  #loader.hidden { opacity: 0; pointer-events: none; }
 
   .spinner {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    width: 50px; height: 50px;
-    border: 5px solid rgba(255,255,255,0.1);
-    border-top-color: #D50000;
+    width: 44px;
+    height: 44px;
+    border: 4px solid rgba(255,255,255,0.15);
+    border-top-color: #fff;
     border-radius: 50%;
-    animation: spin 1s linear infinite;
-    display: none;
+    animation: spin 0.8s linear infinite;
   }
-  .spinner.visible { display: block; }
-  @keyframes spin { to { transform: translate(-50%, -50%) rotate(360deg); } }
 
+  @keyframes spin { to { transform: rotate(360deg); } }
 </style>
 </head>
-<body oncontextmenu="return false;">
+<body>
 
-<div id="video-container">
-  <video id="video" playsinline autoplay crossorigin="anonymous"></video>
+<div id="player-wrap">
 
-  <div class="spinner" id="spinner"></div>
+  <div id="loader"><div class="spinner"></div></div>
 
-  <div class="big-play" id="big-play">
-    <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+  <div id="error-msg">
+    <svg viewBox="0 0 24 24" fill="white">
+      <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10
+        10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
+    </svg>
+    <p id="error-text">No stream URL provided. Please supply a valid <code>?file=</code> or <code>?get=</code> parameter.</p>
   </div>
 
-  <div class="controls" id="controls">
-    <button class="ctrl-btn" id="play-btn">
-      <svg id="play-icon" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
-    </button>
-
-    <button class="ctrl-btn" id="mute-btn">
-      <svg id="vol-icon" viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
-    </button>
-    <input type="range" class="volume-slider" id="vol-slider" min="0" max="1" step="0.05" value="1">
-
-    <span class="time-display" id="time-display">LIVE</span>
-
-    <div style="flex-grow: 1; display: flex; justify-content: center;">
-        <select class="quality-select" id="quality-select">
-            <option value="-1">Auto</option>
-        </select>
-    </div>
-
-    <button class="ctrl-btn" id="fs-btn">
-      <svg viewBox="0 0 24 24"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>
-    </button>
+  <div id="shaka-container" data-shaka-player-container data-shaka-player-cast-receiver-id="">
+    <video id="video" data-shaka-player autoplay playsinline></video>
   </div>
+
 </div>
 
 <script>
-// Logic remains identical to your request for compatibility
-function getParam(n) { return new URLSearchParams(window.location.search).get(n) || ""; }
-function decodeUrl() {
-  const g = getParam("get"), f = getParam("file");
-  try { return g ? atob(g) : f; } catch(e) { return g || f; }
-}
+(function () {
+  "use strict";
 
-const fileUrl = decodeUrl();
-const video = document.getElementById("video");
-const container = document.getElementById("video-container");
-const bigPlay = document.getElementById("big-play");
+  function param(name) {
+    try { return new URL(window.location.href).searchParams.get(name) || ""; }
+    catch (_) { return ""; }
+  }
 
-async function initPlayer() {
+  function safeAtob(str) {
+    try { return atob(str); } catch (_) { return str; }
+  }
+
+  const get      = param("get");
+  const fileUrl  = get ? safeAtob(get) : param("file");
+  const ckParam  = param("ck");
+  const wvParam  = param("wv");
+
+  const loader   = document.getElementById("loader");
+  const errorEl  = document.getElementById("error-msg");
+  const errorTxt = document.getElementById("error-text");
+
+  document.addEventListener("contextmenu", e => e.preventDefault());
+
+  if (!fileUrl) {
+    loader.classList.add("hidden");
+    errorEl.classList.add("show");
+    return;
+  }
+
+  function onPlayerError(error) {
+    console.error("Shaka Error code:", error.code, error);
+    loader.classList.add("hidden");
+    if (error.severity === shaka.util.Error.Severity.CRITICAL) {
+      errorTxt.textContent = "Stream error (code " + error.code + "). The stream may be offline or unavailable.";
+      errorEl.classList.add("show");
+    }
+  }
+
   shaka.polyfill.installAll();
-  const player = new shaka.Player(video);
-  
-  // Global robustness settings
-  player.configure({
-    streaming: { bufferingGoal: 30, rebufferingGoal: 2, retryParameters: { maxAttempts: 5 } }
-  });
 
-  player.addEventListener("buffering", (e) => { 
-    document.getElementById("spinner").classList.toggle("visible", e.buffering); 
-  });
+  shaka.Player.probeSupport().then(function () {
 
-  try {
-    await player.load(fileUrl);
-    // Quality Populator
-    const tracks = player.getVariantTracks();
-    const sel = document.getElementById("quality-select");
-    tracks.forEach(t => {
-      if(t.height) {
-        let opt = document.createElement("option");
-        opt.value = t.id; opt.text = t.height + "p";
-        sel.appendChild(opt);
+    const video    = document.getElementById("video");
+    const ui       = video["ui"];
+    const controls = ui.getControls();
+    const player   = controls.getPlayer();
+
+    window.player = player;
+    window.ui     = ui;
+
+    ui.configure({
+      controlPanelElements: [
+        "play_pause", "mute", "volume", "spacer",
+        "caption", "quality", "language",
+        "picture_in_picture", "fullscreen"
+      ],
+      addSeekBar: true,
+      seekBarColors: {
+        base:   "rgba(255,255,255,0.3)",
+        played: "rgba(255,255,255,0.9)"
       }
     });
-  } catch (e) { console.error("Load Error", e); }
 
-  // UI Event Listeners
-  const togglePlay = () => video.paused ? video.play() : video.pause();
-  document.getElementById("play-btn").onclick = togglePlay;
-  bigPlay.onclick = () => video.play();
-  video.onclick = togglePlay;
-
-  video.onplay = () => { bigPlay.classList.remove("visible"); container.classList.remove("paused"); };
-  video.onpause = () => { bigPlay.classList.add("visible"); container.classList.add("paused"); };
-
-  // Fullscreen Logic for Mobile
-  document.getElementById("fs-btn").onclick = () => {
-    if (!document.fullscreenElement) {
-        if (container.requestFullscreen) container.requestFullscreen();
-        else if (container.webkitRequestFullscreen) container.webkitRequestFullscreen();
-        else if (video.webkitEnterFullscreen) video.webkitEnterFullscreen(); // iOS Safari
-    } else {
-        document.exitFullscreen?.();
+    if (wvParam) {
+      player.configure({ drm: { servers: { "com.widevine.alpha": wvParam } } });
+    } else if (ckParam) {
+      const parts = ckParam.split(":");
+      const keyId = parts[0] || "";
+      const key   = parts[1] || "";
+      if (keyId && key) {
+        player.configure({ drm: { clearKeys: { [keyId]: key } } });
+      }
     }
-  };
-}
 
-if(fileUrl) initPlayer();
+    player.addEventListener("error", e => onPlayerError(e.detail));
+    controls.addEventListener("error", e => onPlayerError(e.detail));
+
+    player.addEventListener("trackschanged", () => {
+      const tracks = player.getVariantTracks();
+      if (tracks.length > 0) {
+        player.selectVariantTrack(tracks[tracks.length - 1], true);
+      }
+    });
+
+    player.load(fileUrl).then(function () {
+      loader.classList.add("hidden");
+      video.play().catch(err => console.warn("Autoplay blocked:", err));
+    }).catch(onPlayerError);
+
+  }).catch(onPlayerError);
+
+  window.addEventListener("message", function (ev) {
+    if (ev.data && ev.data.hsUrl && window.player) {
+      loader.classList.remove("hidden");
+      errorEl.classList.remove("show");
+      window.player.load(ev.data.hsUrl).then(function () {
+        loader.classList.add("hidden");
+        document.getElementById("video").play().catch(() => {});
+      }).catch(onPlayerError);
+    }
+  });
+
+})();
 </script>
 </body>
 </html>
